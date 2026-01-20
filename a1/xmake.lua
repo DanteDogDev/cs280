@@ -6,6 +6,7 @@ target("cs250", function()
 
 	set_languages("c++11")
 	-- add_cxxflags("-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
+	add_cxxflags("-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
 end)
 
 --

@@ -181,11 +181,20 @@ public:
   OAStats GetStats(void) const;           // returns the statistics for the allocator
 
 private:
-  // Some "suggested" members (only a suggestion!)
-  GenericObject* PageList_;              // the beginning of the list of pages
-  GenericObject* FreeList_;              // the beginning of the list of objects
-  void allocate_new_page(void);          // allocates another page of objects
-  void put_on_freelist(void* Object);    // puts Object onto the free list
+  // // Some "suggested" members (only a suggestion!)
+  struct {
+    size_t pageBlockSize;
+    size_t memBlockSize;
+    OAConfig config;
+    OAStats stats;
+    GenericObject* pageList;    // the beginning of the list of pages
+    GenericObject* freeList;    // the beginning of the list of objects
+  } m;
+
+  void NewPage();
+
+  // void allocate_new_page(void);          // allocates another page of objects
+  // void put_on_freelist(void* Object);    // puts Object onto the free list
 
   // Make private to prevent copy construction and assignment
   ObjectAllocator(const ObjectAllocator& oa) = delete;
