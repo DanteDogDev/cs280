@@ -1,5 +1,6 @@
 #include "ObjectAllocator.h"
 
+#include <cstdint>
 #include <cstring>
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig& config) {
@@ -22,14 +23,12 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig& config) {
 
 void ObjectAllocator::NewPage() {
   if (m.stats.PagesInUse_ == m.config.MaxPages_) {
-    throw OAException(OAException::E_NO_PAGES,"Maximum Pages Has Been Reached");
+    throw OAException(OAException::E_NO_PAGES, "Maximum Pages Has Been Reached");
   }
   unsigned char* memory;
   try {
-    memory = new unsigned char[m.pageBlockSize + m.memBlockSize * m.config.ObjectsPerPage_];
-  } catch (...) { 
-    throw OAException(OAException::E_NO_MEMORY,"Out Of Memory");
-  }
+    memory = new unsigned char[m.stats.PageSize_];
+  } catch (...) { throw OAException(OAException::E_NO_MEMORY, "Out Of Memory"); }
 
   // Page Block
   size_t pb_offset = sizeof(GenericObject*);    // page block offset
@@ -57,14 +56,16 @@ void ObjectAllocator::NewPage() {
     for (size_t j = 0; j < m.config.PadBytes_; ++j) {
       memory[offset++] = PAD_PATTERN;
     }
-    for (size_t j = 0; j < m.config.Alignment_; ++j) {
-      memory[offset++] = ALIGN_PATTERN;
-    }
-    for (size_t j = 0; j < m.config.HBlockInfo_.size_; ++j) {
-      memory[offset++] = 0;
-    }
-    for (size_t j = 0; j < m.config.PadBytes_; ++j) {
-      memory[offset++] = PAD_PATTERN;
+    if (i != m.config.ObjectsPerPage_ - 1) {
+      for (size_t j = 0; j < m.config.Alignment_; ++j) {
+        memory[offset++] = ALIGN_PATTERN;
+      }
+      for (size_t j = 0; j < m.config.HBlockInfo_.size_; ++j) {
+        memory[offset++] = 0;
+      }
+      for (size_t j = 0; j < m.config.PadBytes_; ++j) {
+        memory[offset++] = PAD_PATTERN;
+      }
     }
   }
 
@@ -83,7 +84,7 @@ void ObjectAllocator::NewPage() {
   m.stats.PagesInUse_++;
 }
 
-ObjectAllocator::~ObjectAllocator() { 
+ObjectAllocator::~ObjectAllocator() {
   m.freeList = nullptr;
   while (m.pageList) {
     auto* temp = m.pageList;
@@ -109,6 +110,38 @@ void* ObjectAllocator::Allocate(const char* label) {
 }
 
 void ObjectAllocator::Free(void* label) {
+  // {
+  //   bool found = false;
+  //   auto* page_list = m.pageList;
+  //   auto addr_label = reinterpret_cast<std::uintptr_t>(label);
+  //   while (page_list) {
+  //     auto addr_begin = reinterpret_cast<std::uintptr_t>(page_list);
+  //     auto addr_end = addr_begin + m.stats.PageSize_;
+  //     if (addr_begin < addr_label && addr_label < addr_end) {
+  //       auto relative = addr_label - addr_begin;
+  //       relative -= m.pageBlockSize;
+  //       if (relative % m.memBlockSize == 0) {
+  //         found = true;
+  //         break;
+  //       } else {
+  //         break;
+  //       }
+  //     }
+  //     page_list = page_list->Next;
+  //   }
+  //   if (not found) {
+  //     throw OAException(OAException::E_BAD_BOUNDARY, "Free memory not allocated in the object allocator");
+  //   }
+  // }
+  {
+    auto* free_list = m.freeList;
+    while (free_list) {
+      if (free_list == label) {
+        throw OAException(OAException::E_MULTIPLE_FREE, "Double Free");
+      }
+      free_list = free_list->Next;
+    }
+  }
   m.stats.Deallocations_++;
   m.stats.FreeObjects_++;
   m.stats.ObjectsInUse_--;
