@@ -5,7 +5,7 @@
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig& config) {
   size_t page_block_size = sizeof(void*) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.InterAlignSize_ + config.PadBytes_;
-  size_t mem_block_size = ObjectSize + config.PadBytes_ + config.Alignment_ + config.HBlockInfo_.size_ + config.PadBytes_;
+  size_t mem_block_size = ObjectSize + config.PadBytes_ + config.InterAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
   // clang-format off
   m = {
     page_block_size,
@@ -17,7 +17,8 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig& config) {
   };
   // clang-format on
   m.stats.ObjectSize_ = ObjectSize;
-  m.stats.PageSize_ = page_block_size + mem_block_size * config.ObjectsPerPage_ - config.PadBytes_ - config.HBlockInfo_.size_;
+  m.stats.PageSize_ =
+      page_block_size + mem_block_size * config.ObjectsPerPage_ - config.PadBytes_ - config.HBlockInfo_.size_ - config.InterAlignSize_;
   NewPage();
 }
 
@@ -57,7 +58,7 @@ void ObjectAllocator::NewPage() {
       memory[offset++] = PAD_PATTERN;
     }
     if (i != m.config.ObjectsPerPage_ - 1) {
-      for (size_t j = 0; j < m.config.Alignment_; ++j) {
+      for (size_t j = 0; j < m.config.InterAlignSize_; ++j) {
         memory[offset++] = ALIGN_PATTERN;
       }
       for (size_t j = 0; j < m.config.HBlockInfo_.size_; ++j) {
@@ -104,35 +105,49 @@ void* ObjectAllocator::Allocate(const char* label) {
     m.stats.MostObjects_ = m.stats.ObjectsInUse_;
   }
   auto* obj = m.freeList;
+  uintptr_t header = reinterpret_cast<uintptr_t>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
+  switch (m.config.HBlockInfo_.type_) {
+    case OAConfig::hbBasic:
+      (*reinterpret_cast<unsigned int*>(header)) = m.stats.Allocations_;
+      (*reinterpret_cast<char*>(header + sizeof(unsigned int))) = true;
+      break;
+    case OAConfig::hbExtended:    // TODO:
+      (*reinterpret_cast<unsigned int*>(header)) = m.stats.Allocations_;
+      // (*reinterpret_cast<char*>(header)) = true;
+      // (*reinterpret_cast<unsigned short*>(header + sizeof(char)))++;
+      break;
+    case OAConfig::hbExternal: break;
+    case OAConfig::hbNone: break;
+  }
   m.freeList = m.freeList->Next;
   memset(obj, ALLOCATED_PATTERN, m.stats.ObjectSize_);
   return obj;
 }
 
 void ObjectAllocator::Free(void* label) {
-  // {
-  //   bool found = false;
-  //   auto* page_list = m.pageList;
-  //   auto addr_label = reinterpret_cast<std::uintptr_t>(label);
-  //   while (page_list) {
-  //     auto addr_begin = reinterpret_cast<std::uintptr_t>(page_list);
-  //     auto addr_end = addr_begin + m.stats.PageSize_;
-  //     if (addr_begin < addr_label && addr_label < addr_end) {
-  //       auto relative = addr_label - addr_begin;
-  //       relative -= m.pageBlockSize;
-  //       if (relative % m.memBlockSize == 0) {
-  //         found = true;
-  //         break;
-  //       } else {
-  //         break;
-  //       }
-  //     }
-  //     page_list = page_list->Next;
-  //   }
-  //   if (not found) {
-  //     throw OAException(OAException::E_BAD_BOUNDARY, "Free memory not allocated in the object allocator");
-  //   }
-  // }
+  {
+    bool found = false;
+    auto* page_list = m.pageList;
+    auto addr_label = reinterpret_cast<std::uintptr_t>(label);
+    while (page_list) {
+      auto addr_begin = reinterpret_cast<std::uintptr_t>(page_list);
+      auto addr_end = addr_begin + m.stats.PageSize_;
+      if (addr_begin < addr_label && addr_label < addr_end) {
+        auto relative = addr_label - addr_begin;
+        relative -= m.pageBlockSize;
+        if (relative % m.memBlockSize == 0) {
+          found = true;
+          break;
+        } else {
+          break;
+        }
+      }
+      page_list = page_list->Next;
+    }
+    if (not found) {
+      throw OAException(OAException::E_BAD_BOUNDARY, "Free memory not allocated in the object allocator");
+    }
+  }
   {
     auto* free_list = m.freeList;
     while (free_list) {
@@ -147,6 +162,20 @@ void ObjectAllocator::Free(void* label) {
   m.stats.ObjectsInUse_--;
   memset(label, FREED_PATTERN, m.stats.ObjectSize_);
   auto* obj = reinterpret_cast<GenericObject*>(label);
+  uintptr_t header = reinterpret_cast<uintptr_t>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
+  switch (m.config.HBlockInfo_.type_) {
+    case OAConfig::hbBasic:
+      (*reinterpret_cast<unsigned int*>(header)) = 0;
+      (*reinterpret_cast<char*>(header + sizeof(unsigned int))) = false;
+      break;
+    case OAConfig::hbExtended:    // TODO:
+      // (*reinterpret_cast<char*>(header)) = false;
+      // (*reinterpret_cast<unsigned short*>(header + sizeof(char)));
+      // (*reinterpret_cast<unsigned int*>(header + sizeof(char) + sizeof(short))) = 0;
+      break;
+    case OAConfig::hbExternal: break;
+    case OAConfig::hbNone: break;
+  }
   obj->Next = m.freeList;
   m.freeList = obj;
   (void)label;
@@ -189,9 +218,3 @@ OAConfig ObjectAllocator::GetConfig(void) const {
 OAStats ObjectAllocator::GetStats(void) const {
   return m.stats;
 }
-
-// void ObjectAllocator::allocate_new_page(void) { }
-//
-// void put_on_freelist(void* Object) {
-//   (void)Object;
-// }

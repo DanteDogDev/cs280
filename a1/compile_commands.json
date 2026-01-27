@@ -1,16 +1,16 @@
 [
 {
   "directory": "/home/dantedogdev/git/cs280/a1",
-  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/PRNG.cpp.o", "src/PRNG.cpp"],
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/PRNG.cpp.o", "src/PRNG.cpp"],
   "file": "src/PRNG.cpp"
 },
 {
   "directory": "/home/dantedogdev/git/cs280/a1",
-  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/driver-sample.cpp.o", "src/driver-sample.cpp"],
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/driver-sample.cpp.o", "src/driver-sample.cpp"],
   "file": "src/driver-sample.cpp"
 },
 {
   "directory": "/home/dantedogdev/git/cs280/a1",
-  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/ObjectAllocator.cpp.o", "src/ObjectAllocator.cpp"],
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++11", "-Wall", "-Wextra", "-Wconversion", "-pedantic", "-DNDEBUG", "-o", "build/.objs/cs250/linux/x86_64/release/src/ObjectAllocator.cpp.o", "src/ObjectAllocator.cpp"],
   "file": "src/ObjectAllocator.cpp"
 }]
