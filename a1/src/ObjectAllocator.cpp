@@ -31,52 +31,47 @@ void ObjectAllocator::NewPage() {
     memory = new unsigned char[m.stats.PageSize_];
   } catch (...) { throw OAException(OAException::E_NO_MEMORY, "Out Of Memory"); }
 
-  // Page Block
-  size_t pb_offset = sizeof(GenericObject*);    // page block offset
-  auto page = reinterpret_cast<GenericObject*>(memory);
-  page->Next = nullptr;
-  for (size_t i = 0; i < m.config.LeftAlignSize_; ++i) {
-    memory[pb_offset++] = ALIGN_PATTERN;
-  }
-  for (size_t i = 0; i < m.config.HBlockInfo_.size_; ++i) {
-    memory[pb_offset++] = 0;
-  }
-  for (size_t i = 0; i < m.config.InterAlignSize_; ++i) {
-    memory[pb_offset++] = ALIGN_PATTERN;
-  }
-  for (size_t i = 0; i < m.config.PadBytes_; ++i) {
-    memory[pb_offset++] = PAD_PATTERN;
+  {
+    size_t pb_offset = sizeof(GenericObject*);    // page block offset
+    // Page Block
+    memset(memory + pb_offset, ALIGN_PATTERN, m.config.LeftAlignSize_);
+    pb_offset += m.config.LeftAlignSize_;
+    memset(memory + pb_offset, 0, m.config.HBlockInfo_.size_);
+    pb_offset += m.config.HBlockInfo_.size_;
+    memset(memory + pb_offset, ALIGN_PATTERN, m.config.InterAlignSize_);
+    pb_offset += m.config.InterAlignSize_;
+    memset(memory + pb_offset, PAD_PATTERN, m.config.PadBytes_);
+    pb_offset += m.config.PadBytes_;
   }
 
   // Memory Block
   for (size_t i = 0; i < m.config.ObjectsPerPage_; ++i) {
-    size_t offset = pb_offset + m.memBlockSize * i;
-    for (size_t j = 0; j < m.stats.ObjectSize_; ++j) {
-      memory[offset++] = UNALLOCATED_PATTERN;
-    }
-    for (size_t j = 0; j < m.config.PadBytes_; ++j) {
-      memory[offset++] = PAD_PATTERN;
-    }
+    size_t offset = m.pageBlockSize + m.memBlockSize * i;
+
+    memset(memory + offset, UNALLOCATED_PATTERN, m.stats.ObjectSize_);
+    offset += m.stats.ObjectSize_;
+    memset(memory + offset, PAD_PATTERN, m.config.PadBytes_);
+    offset += m.config.PadBytes_;
     if (i != m.config.ObjectsPerPage_ - 1) {
-      for (size_t j = 0; j < m.config.InterAlignSize_; ++j) {
-        memory[offset++] = ALIGN_PATTERN;
-      }
-      for (size_t j = 0; j < m.config.HBlockInfo_.size_; ++j) {
-        memory[offset++] = 0;
-      }
-      for (size_t j = 0; j < m.config.PadBytes_; ++j) {
-        memory[offset++] = PAD_PATTERN;
-      }
+      memset(memory + offset, ALIGN_PATTERN, m.config.InterAlignSize_);
+      offset += m.config.InterAlignSize_;
+      memset(memory + offset, 0, m.config.HBlockInfo_.size_);
+      offset += m.config.HBlockInfo_.size_;
+      memset(memory + offset, PAD_PATTERN, m.config.PadBytes_);
+      offset += m.config.PadBytes_;
     }
   }
 
   for (size_t i = 0; i < m.config.ObjectsPerPage_; ++i) {
-    size_t offset = pb_offset + m.memBlockSize * i;
+    size_t offset = m.pageBlockSize + m.memBlockSize * i;
     auto* obj = reinterpret_cast<GenericObject*>(&memory[offset]);
     obj->Next = m.freeList;
     m.freeList = obj;
     m.stats.FreeObjects_++;
   }
+
+  auto page = reinterpret_cast<GenericObject*>(memory);
+  page->Next = nullptr;
 
   if (m.pageList) {
     page->Next = m.pageList;
@@ -105,22 +100,44 @@ void* ObjectAllocator::Allocate(const char* label) {
     m.stats.MostObjects_ = m.stats.ObjectsInUse_;
   }
   auto* obj = m.freeList;
-  uintptr_t header = reinterpret_cast<uintptr_t>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
-  switch (m.config.HBlockInfo_.type_) {
-    case OAConfig::hbBasic:
-      (*reinterpret_cast<unsigned int*>(header)) = m.stats.Allocations_;
-      (*reinterpret_cast<char*>(header + sizeof(unsigned int))) = true;
-      break;
-    case OAConfig::hbExtended:    // TODO:
-      (*reinterpret_cast<unsigned int*>(header)) = m.stats.Allocations_;
-      // (*reinterpret_cast<char*>(header)) = true;
-      // (*reinterpret_cast<unsigned short*>(header + sizeof(char)))++;
-      break;
-    case OAConfig::hbExternal: break;
-    case OAConfig::hbNone: break;
-  }
   m.freeList = m.freeList->Next;
   memset(obj, ALLOCATED_PATTERN, m.stats.ObjectSize_);
+  {
+    auto header = reinterpret_cast<unsigned char*>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
+    switch (m.config.HBlockInfo_.type_) {
+      case OAConfig::hbBasic: {
+        auto* alloc_num = (reinterpret_cast<unsigned int*>(header));
+        header += sizeof(unsigned int);
+        auto* flag = (reinterpret_cast<unsigned char*>(header));
+        *alloc_num = m.stats.Allocations_;
+        *flag = 1;
+        break;
+      }
+      case OAConfig::hbExtended: {    // TODO:
+        header += m.config.HBlockInfo_.additional_;
+        auto* use_counter = (reinterpret_cast<unsigned short*>(header));
+        header += sizeof(unsigned short);
+        auto* alloc_num = (reinterpret_cast<unsigned*>(header));
+        header += sizeof(unsigned int);
+        auto* flag = (reinterpret_cast<unsigned char*>(header));
+        *use_counter = *use_counter + 1;
+        *alloc_num = m.stats.Allocations_;
+        *flag = 1;
+        break;
+      }
+      case OAConfig::hbExternal: {
+        auto* ptr = (reinterpret_cast<MemBlockInfo**>(header));
+        *ptr = new MemBlockInfo();
+        (*ptr)->alloc_num = m.stats.Allocations_;
+        (*ptr)->in_use = 1;
+        (*ptr)->label = strdup(label);
+        break;
+      }
+      case OAConfig::hbNone: {
+        break;
+      }
+    }
+  }
   return obj;
 }
 
@@ -157,28 +174,66 @@ void ObjectAllocator::Free(void* label) {
       free_list = free_list->Next;
     }
   }
+  memset(label, FREED_PATTERN, m.stats.ObjectSize_);
+  auto* obj = reinterpret_cast<GenericObject*>(label);
+  obj->Next = m.freeList;
+  m.freeList = obj;
   m.stats.Deallocations_++;
   m.stats.FreeObjects_++;
   m.stats.ObjectsInUse_--;
-  memset(label, FREED_PATTERN, m.stats.ObjectSize_);
-  auto* obj = reinterpret_cast<GenericObject*>(label);
-  uintptr_t header = reinterpret_cast<uintptr_t>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
-  switch (m.config.HBlockInfo_.type_) {
-    case OAConfig::hbBasic:
-      (*reinterpret_cast<unsigned int*>(header)) = 0;
-      (*reinterpret_cast<char*>(header + sizeof(unsigned int))) = false;
-      break;
-    case OAConfig::hbExtended:    // TODO:
-      // (*reinterpret_cast<char*>(header)) = false;
-      // (*reinterpret_cast<unsigned short*>(header + sizeof(char)));
-      // (*reinterpret_cast<unsigned int*>(header + sizeof(char) + sizeof(short))) = 0;
-      break;
-    case OAConfig::hbExternal: break;
-    case OAConfig::hbNone: break;
+  {
+    auto header = reinterpret_cast<unsigned char*>(obj) - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
+    switch (m.config.HBlockInfo_.type_) {
+      case OAConfig::hbBasic: {
+        auto* alloc_num = (reinterpret_cast<unsigned int*>(header));
+        header += sizeof(unsigned int);
+        auto* flag = (reinterpret_cast<unsigned char*>(header));
+        *alloc_num = 0;
+        *flag = 0;
+        break;
+      }
+      case OAConfig::hbExtended: {    // TODO:
+        header += m.config.HBlockInfo_.additional_;
+        // auto* use_counter = (reinterpret_cast<unsigned short*>(header));
+        header += sizeof(unsigned short);
+        auto* alloc_num = (reinterpret_cast<unsigned*>(header));
+        header += sizeof(unsigned int);
+        auto* flag = (reinterpret_cast<unsigned char*>(header));
+        // *use_counter = *use_counter + 1;
+        *alloc_num = 0;
+        *flag = 0;
+        break;
+      }
+      case OAConfig::hbExternal: {
+        auto* ptr = (reinterpret_cast<MemBlockInfo**>(header));
+        *ptr = new MemBlockInfo();
+        (*ptr)->alloc_num = 0;
+        (*ptr)->in_use = 0;
+        free((*ptr)->label);
+        (*ptr)->label = nullptr;
+        break;
+      }
+      case OAConfig::hbNone: break;
+    }
   }
-  obj->Next = m.freeList;
-  m.freeList = obj;
-  (void)label;
+  {
+    auto left_pad = reinterpret_cast<unsigned char*>(obj) - m.config.PadBytes_;
+    for (size_t i = 0; i < m.config.PadBytes_; ++i) {
+      if (*left_pad != PAD_PATTERN) {
+        throw OAException(OAException::E_CORRUPTED_BLOCK, "PadBytes_ on the left corrupted");
+      }
+      left_pad++;
+    }
+  }
+  {
+    auto right_pad = reinterpret_cast<unsigned char*>(obj) + m.stats.ObjectSize_;
+    for (size_t i = 0; i < m.config.PadBytes_; ++i) {
+      if (*right_pad != PAD_PATTERN) {
+        throw OAException(OAException::E_CORRUPTED_BLOCK, "PadBytes_ on the right corrupted");
+      }
+      right_pad++;
+    }
+  }
 }
 
 unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK fn) const {
