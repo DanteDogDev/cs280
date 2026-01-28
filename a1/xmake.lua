@@ -1,12 +1,12 @@
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.valgrind")
 
 target("cs250", function()
 	set_kind("binary")
 	add_files("src/*.cpp")
 
 	set_languages("c++11")
-	-- add_cxxflags("-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
-	add_cxxflags("-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
+	add_cxxflags("-Werror", "-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
+	-- add_cxxflags("-Wall", "-Wextra", "-Wconversion", "-pedantic", { force = true })
 end)
 
 --
