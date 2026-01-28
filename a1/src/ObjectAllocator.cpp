@@ -85,6 +85,22 @@ void ObjectAllocator::NewPage() {
 ObjectAllocator::~ObjectAllocator() {
   m.freeList = nullptr;
   while (m.pageList) {
+    unsigned char* obj = reinterpret_cast<unsigned char*>(m.pageList) + m.pageBlockSize;
+    for (size_t i = 0; i < m.config.ObjectsPerPage_; ++i) {
+      if (m.config.HBlockInfo_.type_ == OAConfig::hbExternal) {
+        unsigned char* header = obj - m.config.PadBytes_ - m.config.HBlockInfo_.size_;
+        auto* infoPtr = *reinterpret_cast<MemBlockInfo**>(header);
+        if (infoPtr) {
+          if (infoPtr->label) {
+            free(infoPtr->label);
+          }
+          delete infoPtr;
+          *reinterpret_cast<MemBlockInfo**>(header) = nullptr;
+        }
+      }
+      obj += m.memBlockSize;
+    }
+
     auto* temp = m.pageList;
     m.pageList = m.pageList->Next;
     delete[] temp;
@@ -227,8 +243,15 @@ void ObjectAllocator::Free(void* label) {
         break;
       }
       case OAConfig::hbExternal: {
-        auto* ptr = (reinterpret_cast<MemBlockInfo**>(header));
-        *ptr = new MemBlockInfo();
+        auto* ptr = reinterpret_cast<MemBlockInfo**>(header);
+        auto* info = *ptr;
+        if (info) {
+          if (info->label) {
+            free(info->label);
+          }
+          delete info;
+          *ptr = nullptr;
+        }
         break;
       }
       case OAConfig::hbNone: break;
