@@ -1,0 +1,16 @@
+[
+{
+  "directory": "/home/dantedogdev/git/cs280",
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Werror", "-Wall", "-Wextra", "-Wpedantic", "-O3", "-std=c++11", "-DNDEBUG", "-o", "build/.objs/a2/linux/x86_64/release/src/PRNG.cpp.o", "src/PRNG.cpp"],
+  "file": "src/PRNG.cpp"
+},
+{
+  "directory": "/home/dantedogdev/git/cs280",
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Werror", "-Wall", "-Wextra", "-Wpedantic", "-O3", "-std=c++11", "-DNDEBUG", "-o", "build/.objs/a2/linux/x86_64/release/src/BList.cpp.o", "src/BList.cpp"],
+  "file": "src/BList.cpp"
+},
+{
+  "directory": "/home/dantedogdev/git/cs280",
+  "arguments": ["/usr/bin/g++", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Werror", "-Wall", "-Wextra", "-Wpedantic", "-O3", "-std=c++11", "-DNDEBUG", "-o", "build/.objs/a2/linux/x86_64/release/src/driver.cpp.o", "src/driver.cpp"],
+  "file": "src/driver.cpp"
+}]
